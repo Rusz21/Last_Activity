@@ -3,6 +3,8 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 
+import altair as alt
+
 from sqlalchemy import create_engine, inspect
 from sqlalchemy import text
 
@@ -15,7 +17,8 @@ def load_data():
     query_ext = """
         SELECT "Product", count(*) AS count
         FROM sales_data_duckdb
-        GROUP BY "Product";
+        GROUP BY "Product"
+        ORDER BY count DESC;
     """
     result = connection.execute(text(query_ext))
     return pd.DataFrame(result.mappings().all())
@@ -24,7 +27,26 @@ df = load_data()
 
 
 
-st.title("Sales Dashboard")
-st.subheader("Most bought product")
-st.bar_chart(df.set_index('Product'))
+st.title("🛒 Sales Dashboard")
+st.subheader("📊 Product Sales Overview")
+
+top_n = st.slider("Select number of top products to display", min_value=3, max_value=len(df), value=5)
+df_top = df.head(top_n)
+
+chart = alt.Chart(df_top).mark_bar().encode(
+    x=alt.X('count:Q', title='Units Sold'),
+    y=alt.Y('Product:N', sort='-x', title='Product'),
+    tooltip=['Product', 'count']
+).properties(
+    width=700,
+    height=400,
+    title="Top Selling Products"
+)
+
+st.altair_chart(chart, use_container_width=True)
+
+with st.expander("🔍 View Raw Data"):
+    st.dataframe(df, use_container_width=True)
+
+
 
