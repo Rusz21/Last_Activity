@@ -3,8 +3,6 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 
-import altair as alt
-
 from sqlalchemy import create_engine, inspect
 from sqlalchemy import text
 
@@ -13,40 +11,36 @@ engine = create_engine(warehouse,  client_encoding='utf8')
 connection = engine.connect()
 
 @st.cache_data
-def load_data():
-    query_ext = """
-        SELECT "Product", count(*) AS count
-        FROM sales_data_duckdb
-        GROUP BY "Product"
-        ORDER BY count DESC;
+def load_data(query):  # Added query parameter
     """
-    result = connection.execute(text(query_ext))
-    return pd.DataFrame(result.mappings().all())
+    Executes a SQL query and returns the result as a Pandas DataFrame.
+    """
+    result = connection.execute(text(query))
+    df = pd.DataFrame(result.mappings().all())
+    return df
 
-df = load_data()
+# --- New Section: Display Table Structure ---
+st.title("Sales Data Overview")
+st.subheader("First 5 Rows of sales_data_duckdb")
 
+# Fetch and display the first 5 rows
+query_table_preview = "SELECT * FROM sales_data_duckdb LIMIT 5;"
+df_preview = load_data(query_table_preview)  # Use the load_data function
+st.dataframe(df_preview)  # Use st.dataframe for better display
 
+# --- Original Section: Bar Chart ---
+st.subheader("Most bought product") #Moved Subheader here for better flow
+# Fetch and display the product counts
+query_product_counts = """
+SELECT "Product", count(*) AS count
+FROM sales_data_duckdb
+GROUP BY "Product";
+"""
+df_product_counts = load_data(query_product_counts)
+st.bar_chart(df_product_counts.set_index('Product'))
 
-st.title("🛒 Sales Dashboard")
-st.subheader("📊 Product Sales Overview")
+connection.close()
 
-top_n = st.slider("Select number of top products to display", min_value=3, max_value=len(df), value=5)
-df_top = df.head(top_n)
-
-chart = alt.Chart(df_top).mark_bar().encode(
-    x=alt.X('count:Q', title='Units Sold'),
-    y=alt.Y('Product:N', sort='-x', title='Product'),
-    tooltip=['Product', 'count']
-).properties(
-    width=700,
-    height=400,
-    title="Top Selling Products"
-)
-
-st.altair_chart(chart, use_container_width=True)
-
-with st.expander("🔍 View Raw Data"):
-    st.dataframe(df, use_container_width=True)
 
 
 
