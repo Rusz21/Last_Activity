@@ -14,7 +14,7 @@ connection = engine.connect()
 def load_data():
     query_ext = """
         SELECT "Product", count(*) AS count
-        FROM all_data
+        FROM sales_data_duckdb
         GROUP BY "Product";
     """
     result = connection.execute(text(query_ext))
