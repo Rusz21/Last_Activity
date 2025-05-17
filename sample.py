@@ -10,36 +10,84 @@ warehouse = "postgresql://duckdb_sample_user:i6iKJc6FCs4hVS3AX6yMZngxJvMkzGCs@dp
 engine = create_engine(warehouse,  client_encoding='utf8')
 connection = engine.connect()
 
-@st.cache_data
-def load_data(query):  # Added query parameter
+@st.cache_data(ttl=600)
+def load_data():
+    query = """
+        SELECT "Order Date", "Product", "Price Each", "Quantity Ordered"
+        FROM sales_data_duckdb
+        WHERE "Order Date" IS NOT NULL
     """
-    Executes a SQL query and returns the result as a Pandas DataFrame.
-    """
-    result = connection.execute(text(query))
-    df = pd.DataFrame(result.mappings().all())
-    return df
+    with engine.connect() as conn:
+        result = conn.execute(text(query))
+        df = pd.DataFrame(result.mappings().all())
+        df['Order Date'] = pd.to_datetime(df['Order Date'])
+        df['Revenue'] = df['Price Each'] * df['Quantity Ordered']
+        return df
 
-# --- New Section: Display Table Structure ---
-st.title("Sales Data Overview")
-st.subheader("First 5 Rows of sales_data_duckdb")
+df = load_data()
 
-# Fetch and display the first 5 rows
-query_table_preview = "SELECT * FROM sales_data_duckdb LIMIT 5;"
-df_preview = load_data(query_table_preview)  # Use the load_data function
-st.dataframe(df_preview)  # Use st.dataframe for better display
+# Filter by date
+st.sidebar.header("📅 Filter by Date")
+min_date, max_date = df['Order Date'].min(), df['Order Date'].max()
+date_range = st.sidebar.date_input("Select date range", [min_date, max_date], min_value=min_date, max_value=max_date)
 
-# --- Original Section: Bar Chart ---
-st.subheader("Most bought product") #Moved Subheader here for better flow
-# Fetch and display the product counts
-query_product_counts = """
-SELECT "Product", count(*) AS count
-FROM sales_data_duckdb
-GROUP BY "Product";
-"""
-df_product_counts = load_data(query_product_counts)
-st.bar_chart(df_product_counts.set_index('Product'))
+if len(date_range) == 2:
+    df = df[(df['Order Date'] >= pd.to_datetime(date_range[0])) & (df['Order Date'] <= pd.to_datetime(date_range[1]))]
 
-connection.close()
+# Grouped Data
+product_sales = df.groupby("Product", as_index=False).agg({
+    "Quantity Ordered": "sum",
+    "Revenue": "sum"
+}).sort_values("Quantity Ordered", ascending=False)
+
+# Title
+st.title("🛒 Sales Dashboard")
+st.markdown("### 🔥 Product Performance Overview")
+
+# --- Most Bought Products Chart
+top_n = st.slider("Show Top N Products by Units Sold", 3, len(product_sales), 10)
+top_products = product_sales.head(top_n)
+
+bar_chart = alt.Chart(top_products).mark_bar().encode(
+    x=alt.X('Quantity Ordered:Q', title='Units Sold'),
+    y=alt.Y('Product:N', sort='-x', title='Product'),
+    tooltip=['Product', 'Quantity Ordered', 'Revenue']
+).properties(title="Top Selling Products", width=700)
+
+st.altair_chart(bar_chart, use_container_width=True)
+
+# --- Pie Chart for Market Share
+st.markdown("### 🥧 Product Market Share")
+pie_data = top_products.copy()
+pie_data['Share'] = pie_data['Quantity Ordered'] / pie_data['Quantity Ordered'].sum()
+
+pie_chart = alt.Chart(pie_data).mark_arc(innerRadius=50).encode(
+    theta=alt.Theta(field="Share", type="quantitative"),
+    color=alt.Color(field="Product", type="nominal"),
+    tooltip=['Product', alt.Tooltip('Share:Q', format='.2%')]
+).properties(width=500, height=400)
+
+st.altair_chart(pie_chart, use_container_width=False)
+
+# --- Time-Series Line Chart
+st.markdown("### 📈 Sales Over Time")
+df_daily = df.groupby(df['Order Date'].dt.to_period('D')).agg({
+    'Quantity Ordered': 'sum',
+    'Revenue': 'sum'
+}).reset_index()
+df_daily['Order Date'] = df_daily['Order Date'].dt.to_timestamp()
+
+line_chart = alt.Chart(df_daily).mark_line().encode(
+    x='Order Date:T',
+    y='Revenue:Q',
+    tooltip=['Order Date', 'Revenue']
+).properties(title="Daily Revenue Trend", width=750)
+
+st.altair_chart(line_chart, use_container_width=True)
+
+# --- Raw Data Table
+with st.expander("🔍 Full Sales Data"):
+    st.dataframe(df, use_container_width=True)
 
 
 
