@@ -3,6 +3,8 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 
+import altair as alt
+
 from sqlalchemy import create_engine, inspect
 from sqlalchemy import text
 
