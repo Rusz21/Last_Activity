@@ -6,7 +6,7 @@ import numpy as np
 from sqlalchemy import create_engine, inspect
 from sqlalchemy import text
 
-warehouse = "postgresql://duck_test_user:0qrtdjxLyzqwnlKuTlPpUIrqgqaHIkQ4@dpg-d03so9s9c44c7389on60-a.singapore-postgres.render.com/duck_test"
+warehouse = "postgresql://duckdb_sample_user:i6iKJc6FCs4hVS3AX6yMZngxJvMkzGCs@dpg-d0b2efp5pdvs73c9pi00-a.singapore-postgres.render.com/duckdb_sample"
 engine = create_engine(warehouse,  client_encoding='utf8')
 connection = engine.connect()
 
